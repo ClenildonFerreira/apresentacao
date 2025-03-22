@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Automação de Pesquisa de NPS para Chamadas Telefônicas</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 20px;
+            color: #333;
+        }
+        h1, h2, h3 {
+            color: #2c3e50;
+        }
+        h1 {
+            border-bottom: 2px solid #2c3e50;
+            padding-bottom: 10px;
+        }
+        h2 {
+            margin-top: 30px;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+        }
+        pre {
+            background-color: #f4f4f4;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        code {
+            font-family: Consolas, monospace;
+            color: #c7254e;
+        }
+        ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        ul li {
+            margin-bottom: 10px;
+        }
+        .section {
+            margin-bottom: 40px;
+        }
+        .highlight {
+            background-color: #f9f9f9;
+            padding: 10px;
+            border-left: 4px solid #2c3e50;
+            margin: 20px 0;
+        }
+        .json-example {
+            background-color: #f4f4f4;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .footer {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            text-align: center;
+            color: #777;
+        }
+    </style>
+</head>
+<body>
+    <h1>Automação de Pesquisa de NPS para Chamadas Telefônicas</h1>
+
+    <div class="section">
+        <h2>1️⃣ Captura e Recebimento dos Eventos das Chamadas</h2>
+        <p>Toda a base da automação começa com o monitoramento das ligações. Como detalhei no repositório <strong>Call Events Reports</strong>, configurei a captura dos eventos diretamente da API da GoTo.</p>
+        <p>Cada evento gera um JSON extremamente detalhado, com informações como:</p>
+        <ul>
+            <li>Tipo da chamada (ativa ou receptiva)</li>
+            <li>Número do cliente</li>
+            <li>Ramal do atendente</li>
+            <li>Status da chamada (completada, perdida, cancelada)</li>
+            <li>Duração da ligação</li>
+            <li>Código de encerramento (quem desligou: cliente ou atendente)</li>
+        </ul>
+        <p>Após o término da ligação, a API dispara automaticamente um webhook para o n8n, enviando esse JSON completo para o fluxo de automação.</p>
+    </div>
+
+    <div class="section">
+        <h2>2️⃣ Processamento dos Dados no n8n com JavaScript</h2>
+        <p>Aqui entra a parte mais inteligente da automação. Configurei dois caminhos distintos no n8n — um para chamadas receptivas e outro para chamadas ativas.</p>
+        <p>Com os nós de <strong>Function</strong> e <strong>Function Item</strong>, manipulei o JSON usando JavaScript para:</p>
+        <ul>
+            <li>Identificar o tipo de chamada (incoming ou outgoing).</li>
+            <li>Tratar os dados recebidos, validando números, duração e status da chamada.</li>
+            <li>Aplicar regras de negócio, como filtrar chamadas com menos de 10 segundos (consideradas falhas).</li>
+            <li>Formatar o JSON para deixar só as informações relevantes para a pesquisa.</li>
+        </ul>
+        <div class="json-example">
+            <h3>Exemplo de JSON Recebido:</h3>
+            <pre><code>{
+  "call_id": "abc123",
+  "direction": "incoming",
+  "from": "+5511998765432",
+  "to": "08001234567",
+  "status": "completed",
+  "duration": 180,
+  "end_cause": "caller_hung_up",
+  "agent": {
+    "name": "João Silva",
+    "extension": "202"
+  }
+}</code></pre>
+        </div>
+        <div class="highlight">
+            <p><strong>👉 Fluxo 1: Chamadas Receptivas</strong></p>
+            <p>Se a chamada foi receptiva (<code>"direction": "incoming"</code>), o cliente recebe a pesquisa de NPS logo após a ligação ser encerrada. O JSON é filtrado para extrair o nome do atendente, número do cliente e duração da chamada.</p>
+        </div>
+        <div class="highlight">
+            <p><strong>👉 Fluxo 2: Chamadas Ativas</strong></p>
+            <p>Se a chamada foi ativa (<code>"direction": "outgoing"</code>), o mesmo fluxo é seguido, mas com uma regra extra: só dispara a pesquisa se a chamada durar mais de 30 segundos (evitando ligações sem interação significativa).</p>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>3️⃣ Disparo da Pesquisa e Monitoramento das Respostas</h2>
+        <p>Após o tratamento dos dados, o fluxo segue para o envio da pesquisa de NPS ao cliente.</p>
+        <p>Caso o cliente dê uma nota entre 1 e 3, o n8n dispara um e-mail automático para o supervisor, contendo:</p>
+        <ul>
+            <li>Nome do cliente</li>
+            <li>Número da chamada</li>
+            <li>Nota recebida</li>
+            <li>Protocolo da ligação</li>
+        </ul>
+        <p>Esse e-mail permite que a equipe de supervisão entre em contato rapidamente para entender o motivo da insatisfação e tentar reverter a experiência negativa.</p>
+    </div>
+
+    <div class="section">
+        <h2>4️⃣ Armazenamento e Análise dos Dados com Power BI (e Melhorias)</h2>
+        <p>Os dados das chamadas e das respostas do NPS são exportados para uma planilha, que alimenta um dashboard no <strong>Power BI</strong> via <strong>Power Query</strong>. Para aprimorar a análise e a visualização dos dados, implementei as seguintes melhorias:</p>
+        <ul>
+            <li><strong>Dashboard Interativo:</strong> Gráficos dinâmicos, como gráficos de barras, mapas de calor e gráficos de tendências.</li>
+            <li><strong>Indicadores Chave (KPIs):</strong> NPS médio, taxa de respostas, tempo médio de duração das chamadas e percentual de notas baixas.</li>
+            <li><strong>Detalhamento por Atendente:</strong> Desempenho individual de cada atendente.</li>
+            <li><strong>Alertas Automáticos:</strong> Destaque para quedas no NPS e aumento no volume de chamadas perdidas.</li>
+            <li><strong>Integração com Outras Fontes de Dados:</strong> CRM e sistema de tickets para análises mais profundas.</li>
+            <li><strong>Relatórios Automatizados:</strong> Envio semanal e mensal de relatórios para a equipe de supervisão.</li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <h2>📌 Repositórios do Projeto</h2>
+        <ul>
+            <li><strong>Call Events Reports:</strong> Explica em detalhes como funciona a captura das chamadas e o envio dos eventos via webhook para o n8n.</li>
+            <li><strong>nps-pabx - Grupo Ramos:</strong> Contém o fluxo completo configurado no n8n para processar os dados, disparar a pesquisa e notificar a equipe.</li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <h2>✅ Principais Resultados</h2>
+        <ul>
+            <li>Cobertura total das chamadas, com suporte a ativas e receptivas.</li>
+            <li>E-mail automático para supervisores em notas baixas (1 a 3).</li>
+            <li>Dashboard atualizado no Power BI, com análise em tempo real e visualizações interativas.</li>
+            <li>Processamento avançado de JSON via JavaScript no n8n para controle total dos dados.</li>
+            <li>Insights acionáveis para melhorar a experiência do cliente e o desempenho da equipe.</li>
+        </ul>
+    </div>
+
+    <div class="footer">
+        <p>Esse projeto foi uma das automações mais completas que desenvolvi, integrando JavaScript, n8n, GoTo e Power BI para entregar uma solução prática, inteligente e, acima de tudo, funcional para o Grupo Ramos.</p>
+    </div>
+</body>
+</html>
